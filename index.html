@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Real-Time Web Threat Deconstruction By Team TechAura</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/webcola/WebCola/cola.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.5.1/cytoscape-cola.min.js"></script>
+
+    <style>
+        /* Page background - Deep Blue Theme */
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #172554 50%, #0f172a 100%);
+            min-height: 100vh;
+            color: #e2e8f0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+
+        /* Glass card styling */
+        .glass-morphism {
+            background: rgba(15, 23, 42, 0.7); /* Slate-900 base */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(56, 189, 248, 0.1); /* Cyan hint */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Custom Scrollbar - Blue */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(59, 130, 246, 0.5); /* Blue-500 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(59, 130, 246, 0.8);
+        }
+
+        /* Tooltip adjustments */
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            color: #60a5fa; /* Blue-400 */
+            font-weight: 600;
+            text-decoration: underline;
+            text-decoration-style: dotted;
+        }
+
+        .tooltip-container .tooltip-text {
+            visibility: hidden;
+            width: 240px;
+            background-color: rgba(15, 23, 42, 0.95);
+            color: #fff;
+            text-align: left;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 60;
+            bottom: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            font-size: 12px;
+            font-weight: 400;
+            pointer-events: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        /* Graph container */
+        #cy {
+            width: 100%;
+            min-height: 450px;
+            height: 60vh;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 8px;
+            border: 1px solid rgba(56, 189, 248, 0.1);
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .risk-low { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+        .risk-medium { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+        .risk-high { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+
+        .timeline-item {
+            padding: 10px;
+            margin: 6px 0;
+            border-left: 3px solid #3b82f6; /* Blue-500 */
+            background: rgba(30, 41, 59, 0.4);
+            border-radius: 0 4px 4px 0;
+            font-size: 13px;
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .timeline-item.success { border-left-color: #10b981; }
+        .timeline-item.warning { border-left-color: #f59e0b; }
+        .timeline-item.error { border-left-color: #ef4444; }
+
+        .scrollable {
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .finding-card {
+            background: rgba(30, 41, 59, 0.6);
+            border-radius: 6px;
+            padding: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.2s;
+        }
+        .finding-card:hover {
+            background: rgba(30, 41, 59, 0.9);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-6">
+    <div class="max-w-7xl mx-auto">
+        <div class="glass-morphism rounded-xl p-6 mb-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-extrabold text-white mb-1 tracking-tight">
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">Tech</span>Aura
+                    </h1>
+                    <p class="text-slate-400 text-sm md:text-base">Real-time client-side security analysis & dependency graphing</p>
+                </div>
+                
+            </div>
+        </div>
+
+        <div class="glass-morphism rounded-xl p-5 mb-6">
+            <div class="flex flex-col md:flex-row gap-3 items-stretch">
+                <input 
+                    type="text" 
+                    id="urlInput" 
+                    placeholder="Enter URL (e.g., https://example.com)"
+                    value="https://example.com"
+                    class="flex-1 px-4 py-3 bg-slate-900/50 border border-slate-700 text-white placeholder-slate-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                />
+                <button 
+                    id="analyzeBtn"
+                    class="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-lg hover:from-blue-700 hover:to-cyan-700 transition transform hover:scale-[1.02] shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                >
+                    <span>Analyze</span>
+                </button>
+            </div>
+            
+            <div class="mt-3 flex items-start gap-2 text-xs text-cyan-500/80 bg-cyan-500/10 p-2 rounded border border-cyan-500/20">
+                <span class="text-lg">ℹ️</span>
+                <p>Note: This tool uses a CORS proxy to fetch external sites. Some secure sites may block this access. Analysis happens entirely in your browser.</p>
+            </div>
+        </div>
+
+        <div id="results" style="display: none;">
+            
+            <div class="glass-morphism rounded-xl p-6 mb-6">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                    <div class="flex-1">
+                        <h2 class="text-xl font-bold text-white mb-1">Risk Assessment</h2>
+                        <div class="text-sm text-slate-400 mb-4">
+                            <span class="tooltip-container">Entropy
+                                <span class="tooltip-text">Randomness of code. High entropy (>4.5) suggests obfuscation or packing.</span>
+                            </span> •
+                            <span class="tooltip-container">Trackers
+                                <span class="tooltip-text">Scripts known for ad-tech, fingerprinting, or social analytics.</span>
+                            </span> •
+                            <span class="tooltip-container">Mixed Content
+                                <span class="tooltip-text">Insecure HTTP resources loaded on an HTTPS page.</span>
+                            </span>
+                        </div>
+                        <div id="scoreBreakdown" class="text-sm text-slate-300 bg-black/20 p-3 rounded border border-white/5"></div>
+                    </div>
+
+                    <div class="flex items-center gap-6 justify-center md:justify-end border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6">
+                        <div class="text-center">
+                            <div class="text-6xl font-extrabold text-white tracking-tighter" id="riskScore">--</div>
+                            <div class="text-xs text-slate-500 uppercase mt-1">Score</div>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <div id="riskBadge" class="risk-badge">Ready</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <div class="lg:col-span-1 space-y-6">
+                    <div class="glass-morphism rounded-xl p-5 border-l-4 border-red-500/50">
+                        <h3 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                            <span>🛡️</span> Detected Threats
+                        </h3>
+                        <div id="threatSummary" class="text-sm space-y-2"></div>
+                    </div>
+
+                    <div class="glass-morphism rounded-xl p-5">
+                        <h3 class="text-lg font-bold text-white mb-3">📡 Analysis Log</h3>
+                        <div id="timeline" class="scrollable text-slate-300 font-mono text-xs h-48"></div>
+                    </div>
+
+                    <div class="glass-morphism rounded-xl p-5">
+                        <h3 class="text-lg font-bold text-white mb-3">📝 Metadata</h3>
+                        <div id="metaContent" class="text-xs text-slate-400 space-y-2 scrollable" style="max-height: 200px;"></div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="glass-morphism rounded-xl p-1">
+                        <div class="bg-slate-900/80 p-3 rounded-t-lg border-b border-white/5 flex justify-between items-center">
+                            <h3 class="font-bold text-white">Dependency Graph</h3>
+                            <div class="flex items-center gap-4 text-xs font-semibold">
+                                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Safe</span>
+                                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span> 3rd Party</span>
+                                <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> High Risk</span>
+                            </div>
+                        </div>
+                        <div id="cy" role="application" aria-label="Dependency graph visualization"></div>
+                    </div>
+
+                    <div class="glass-morphism rounded-xl p-5">
+                        <h3 class="text-lg font-bold text-white mb-4">📋 Artifact Details</h3>
+                        <div id="detailedFindings" class="scrollable"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // CONFIGURATION & STATE
+        // ========================================
+        const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+        
+        const KNOWN_TRACKERS = [
+            'google-analytics', 'googletagmanager', 'facebook.net', 'facebook.com',
+            'doubleclick', 'googlesyndication', 'hotjar', 'segment.com', 'segment.io',
+            'mixpanel', 'tiktok.com', 'adservice', 'pixel', 'beacon', 'clarity.ms',
+            'criteo', 'outbrain', 'taboola'
+        ];
+        
+        const SUSPICIOUS_KEYWORDS = [
+            'eval', 'new Function', 'atob', 'btoa', 'document.write', 
+            'innerHTML', 'fromCharCode', 'unescape', 'exec'
+        ];
+
+        let analysisData = {
+            targetUrl: '',
+            targetDomain: '',
+            scripts: [],
+            assets: [],
+            iframes: [],
+            meta: [],
+            timeline: [],
+            riskScore: 0
+        };
+
+        // ========================================
+        // UTILITIES
+        // ========================================
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function resolveUrl(url, base) {
+            try {
+                return new URL(url, base).href;
+            } catch (e) {
+                return url; 
+            }
+        }
+
+        function calculateEntropy(str) {
+            if (!str || str.length === 0) return 0;
+            const freq = {};
+            for (let char of str) freq[char] = (freq[char] || 0) + 1;
+            let entropy = 0;
+            const len = str.length;
+            for (let char in freq) {
+                const p = freq[char] / len;
+                entropy -= p * Math.log2(p);
+            }
+            return parseFloat(entropy.toFixed(2));
+        }
+
+        function extractDomain(url) {
+            try {
+                const urlObj = new URL(url);
+                return urlObj.hostname;
+            } catch (e) {
+                return 'unknown';
+            }
+        }
+
+        function isTracker(domain) {
+            if (!domain) return false;
+            return KNOWN_TRACKERS.some(tracker => domain.toLowerCase().includes(tracker.toLowerCase()));
+        }
+
+        function detectSuspiciousPatterns(code) {
+            const found = [];
+            const lowerCode = (code || '').toLowerCase();
+            for (let keyword of SUSPICIOUS_KEYWORDS) {
+                if (lowerCode.includes(keyword.toLowerCase())) found.push(keyword);
+            }
+            const base64Matches = code.match(/[A-Za-z0-9+/]{60,}={0,2}/g);
+            if (base64Matches) found.push('Long Base64 String');
+            return found;
+        }
+
+        function addTimelineEvent(message, type = 'info') {
+            const timeline = document.getElementById('timeline');
+            const item = document.createElement('div');
+            item.className = `timeline-item ${type}`;
+            item.innerHTML = `
+                <div class="font-semibold">${escapeHtml(message)}</div>
+                <div class="text-[10px] opacity-70 mt-1">${new Date().toLocaleTimeString()}</div>
+            `;
+            timeline.appendChild(item);
+            setTimeout(() => {
+                timeline.scrollTop = timeline.scrollHeight;
+            }, 10);
+        }
+
+        // ========================================
+        // FETCH & PARSE
+        // ========================================
+        async function fetchAndParse(url) {
+            addTimelineEvent(`Initiating fetch for ${url}...`, 'info');
+
+            try {
+                let response;
+                let html;
+                
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000); 
+                    response = await fetch(url, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    addTimelineEvent('✓ Direct access successful', 'success');
+                } catch (e) {
+                    addTimelineEvent('CORS blocked or timeout. Switching to proxy...', 'warning');
+                    response = await fetch(CORS_PROXY + encodeURIComponent(url));
+                }
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                html = await response.text();
+                addTimelineEvent(`✓ Fetched ${(html.length / 1024).toFixed(1)}KB of HTML`, 'success');
+
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+
+                const base = document.createElement('base');
+                base.href = url;
+                if(doc.head) doc.head.appendChild(base);
+
+                return { doc, html };
+            } catch (error) {
+                addTimelineEvent(`✗ Fetch failed: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // ========================================
+        // EXTRACTION LOGIC
+        // ========================================
+        function extractScripts(doc, targetDomain, baseUrl) {
+            const scripts = [];
+            doc.querySelectorAll('script').forEach((script, index) => {
+                let src = script.getAttribute('src'); 
+                const inline = script.textContent;
+
+                if (src) {
+                    const fullSrc = resolveUrl(src, baseUrl);
+                    const domain = extractDomain(fullSrc);
+                    const isThirdParty = domain !== targetDomain && domain !== 'unknown';
+                    
+                    scripts.push({
+                        type: 'external',
+                        src: fullSrc,
+                        domain: domain,
+                        isThirdParty: isThirdParty,
+                        isTracker: isTracker(domain),
+                        entropy: 0,
+                        suspicious: []
+                    });
+                } else if (inline && inline.trim()) {
+                    const entropy = calculateEntropy(inline);
+                    const suspicious = detectSuspiciousPatterns(inline);
+                    scripts.push({
+                        type: 'inline',
+                        code: inline.substring(0, 100),
+                        entropy: entropy,
+                        suspicious: suspicious,
+                        isThirdParty: false,
+                        isTracker: false
+                    });
+                }
+            });
+            return scripts;
+        }
+
+        function extractIframes(doc, targetDomain, baseUrl) {
+            const iframes = [];
+            doc.querySelectorAll('iframe').forEach(iframe => {
+                const rawSrc = iframe.getAttribute('src');
+                if (rawSrc) {
+                    const fullSrc = resolveUrl(rawSrc, baseUrl);
+                    const domain = extractDomain(fullSrc);
+                    iframes.push({ 
+                        src: fullSrc, 
+                        domain: domain, 
+                        isThirdParty: domain !== targetDomain, 
+                        isTracker: isTracker(domain) 
+                    });
+                }
+            });
+            return iframes;
+        }
+
+        // ========================================
+        // GRAPH VISUALIZATION
+        // ========================================
+        function buildGraph() {
+            const elements = [];
+            elements.push({ 
+                data: { id: 'root', label: analysisData.targetDomain, risk: 'root' } 
+            });
+
+            analysisData.scripts.forEach((script, index) => {
+                if(script.type === 'external') {
+                    const id = `s_ext_${script.domain.replace(/\./g, '_')}_${index}`; 
+                    let risk = 'low';
+                    if (script.isTracker) risk = 'high';
+                    else if (script.isThirdParty) risk = 'medium';
+
+                    elements.push({ 
+                        data: { id: id, label: script.domain, risk: risk, type: 'script' } 
+                    });
+                    elements.push({ data: { source: 'root', target: id } });
+                } else {
+                    if (script.entropy > 5 || script.suspicious.length > 0) {
+                        const id = `s_in_${index}`;
+                        elements.push({ 
+                            data: { id: id, label: 'Inline JS', risk: 'high', type: 'script' } 
+                        });
+                        elements.push({ data: { source: 'root', target: id } });
+                    }
+                }
+            });
+
+            analysisData.iframes.forEach((iframe, index) => {
+                const id = `frm_${index}`;
+                const risk = iframe.isTracker ? 'high' : (iframe.isThirdParty ? 'medium' : 'low');
+                elements.push({ 
+                    data: { id: id, label: iframe.domain, risk: risk, type: 'iframe' } 
+                });
+                elements.push({ data: { source: 'root', target: id } });
+            });
+
+            const cyContainer = document.getElementById('cy');
+            cyContainer.innerHTML = ''; 
+
+            const cy = cytoscape({
+                container: cyContainer,
+                elements: elements,
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'label': 'data(label)',
+                            'color': '#fff',
+                            'font-size': '10px',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'width': '50px',
+                            'height': '50px',
+                            'border-width': 2,
+                            'border-color': 'rgba(255,255,255,0.2)'
+                        }
+                    },
+                    // Root Node color changed to Blue-500
+                    { selector: 'node[risk="root"]', style: { 'background-color': '#3b82f6', 'width': 70, 'height': 70, 'font-weight': 'bold' } },
+                    { selector: 'node[risk="low"]', style: { 'background-color': '#10b981' } },
+                    { selector: 'node[risk="medium"]', style: { 'background-color': '#f59e0b' } },
+                    { selector: 'node[risk="high"]', style: { 'background-color': '#ef4444' } },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 1,
+                            'line-color': 'rgba(255,255,255,0.2)',
+                            'curve-style': 'bezier',
+                            'target-arrow-shape': 'triangle',
+                            'target-arrow-color': 'rgba(255,255,255,0.2)'
+                        }
+                    }
+                ],
+                layout: { 
+                    name: 'cola', 
+                    animate: true,
+                    refresh: 1,
+                    maxSimulationTime: 1500,
+                    nodeSpacing: 40,
+                    edgeLengthVal: 100
+                }
+            });
+            
+            addTimelineEvent('✓ Graph rendered successfully', 'success');
+        }
+
+        // ========================================
+        // MAIN ANALYSIS
+        // ========================================
+        async function analyzeWebsite() {
+            const btn = document.getElementById('analyzeBtn');
+            const urlInput = document.getElementById('urlInput');
+            let url = urlInput.value.trim();
+
+            if (!url) { alert('Please enter a URL'); return; }
+            if (!url.startsWith('http')) { url = 'https://' + url; urlInput.value = url; }
+
+            btn.disabled = true;
+            btn.innerHTML = `<span class="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mr-2"></span> Analyzing...`;
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('timeline').innerHTML = '';
+            
+            analysisData = { targetUrl: url, targetDomain: extractDomain(url), scripts: [], iframes: [], timeline: [], riskScore: 0 };
+
+            try {
+                const { doc } = await fetchAndParse(url);
+                
+                analysisData.scripts = extractScripts(doc, analysisData.targetDomain, url);
+                analysisData.iframes = extractIframes(doc, analysisData.targetDomain, url);
+
+                const metas = [];
+                doc.querySelectorAll('meta').forEach(m => {
+                    const name = m.getAttribute('name') || m.getAttribute('property');
+                    const content = m.getAttribute('content');
+                    if(name && content) metas.push({name, content});
+                });
+                
+                let score = 0;
+                let breakdownHtml = '';
+
+                const extScripts = analysisData.scripts.filter(s => s.type === 'external');
+                score += Math.min(extScripts.length * 2, 30);
+                breakdownHtml += `<div>• External Scripts: ${extScripts.length} (+${Math.min(extScripts.length * 2, 30)})</div>`;
+
+                const trackers = [...analysisData.scripts, ...analysisData.iframes].filter(x => x.isTracker);
+                score += trackers.length * 15;
+                if(trackers.length > 0) breakdownHtml += `<div class="text-red-400">• Trackers Found: ${trackers.length} (+${trackers.length * 15})</div>`;
+
+                const susp = analysisData.scripts.filter(s => s.suspicious && s.suspicious.length > 0);
+                score += susp.length * 10;
+                if(susp.length > 0) breakdownHtml += `<div class="text-amber-400">• Suspicious Patterns: ${susp.length} (+${susp.length * 10})</div>`;
+
+                const hasCSP = metas.some(m => m.name.toLowerCase() === 'content-security-policy');
+                if(!hasCSP) {
+                    score += 10;
+                    breakdownHtml += `<div>• Missing CSP Header (+10)</div>`;
+                }
+
+                analysisData.riskScore = Math.min(score, 100);
+
+                document.getElementById('scoreBreakdown').innerHTML = breakdownHtml;
+                document.getElementById('riskScore').textContent = analysisData.riskScore;
+                
+                const badge = document.getElementById('riskBadge');
+                if (score < 30) { badge.className = 'risk-badge risk-low'; badge.textContent = 'Low Risk'; }
+                else if (score < 70) { badge.className = 'risk-badge risk-medium'; badge.textContent = 'Medium Risk'; }
+                else { badge.className = 'risk-badge risk-high'; badge.textContent = 'High Risk'; }
+
+                document.getElementById('metaContent').innerHTML = metas.slice(0, 10).map(m => 
+                    `<div class="border-b border-white/5 pb-1"><strong class="text-slate-300">${escapeHtml(m.name)}</strong>: <span class="text-slate-500 break-all">${escapeHtml(m.content.substring(0, 100))}</span></div>`
+                ).join('');
+
+                const threatDiv = document.getElementById('threatSummary');
+                let threats = [];
+                if(trackers.length) threats.push(`Detected ${trackers.length} known tracking/ad domains.`);
+                if(susp.length) threats.push(`Found ${susp.length} scripts with suspicious keywords (eval, atob, etc).`);
+                if(!hasCSP) threats.push("No Content Security Policy detected.");
+                
+                threatDiv.innerHTML = threats.length ? threats.map(t => `<div class="text-red-400">• ${t}</div>`).join('') : '<div class="text-emerald-400">✓ No major client-side threats detected.</div>';
+
+                const findingsDiv = document.getElementById('detailedFindings');
+                findingsDiv.innerHTML = analysisData.scripts.map(s => {
+                    const colorClass = s.isTracker ? 'border-red-500' : (s.isThirdParty ? 'border-amber-500' : 'border-emerald-500');
+                    const label = s.type === 'external' ? s.domain : 'Inline Script';
+                    return `
+                        <div class="finding-card mb-2 border-l-4 ${colorClass}">
+                            <div class="flex justify-between items-start">
+                                <div class="font-bold text-sm text-gray-200">${escapeHtml(label)}</div>
+                                <div class="text-[10px] uppercase font-bold tracking-wider opacity-60">${s.type}</div>
+                            </div>
+                            <div class="text-xs text-slate-400 mt-1 break-all font-mono">${escapeHtml(s.src || s.code)}</div>
+                            ${s.suspicious && s.suspicious.length ? `<div class="mt-2 text-xs text-red-400 bg-red-400/10 inline-block px-2 py-1 rounded">⚠️ ${s.suspicious.join(', ')}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+
+                buildGraph();
+                addTimelineEvent('Analysis Complete', 'success');
+
+            } catch (e) {
+                console.error(e);
+                alert('Error during analysis: ' + e.message);
+            } finally {
+                btn.innerHTML = 'Analyze';
+                btn.disabled = false;
+            }
+        }
+
+        document.getElementById('analyzeBtn').addEventListener('click', analyzeWebsite);
+        document.getElementById('urlInput').addEventListener('keypress', (e) => { if(e.key === 'Enter') analyzeWebsite(); });
+    </script>
+</body>
+</html>
